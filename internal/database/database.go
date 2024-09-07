@@ -22,12 +22,9 @@ type Task struct {
 
 // создать БД
 func CreateDB(mng *manager.Manager) error {
-	/* appPath, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	mng.Log.LogInfo(appPath) */
-	dbFile := filepath.Join(filepath.Dir("./"), "scheduler.db")
+	dbPath := manager.Mng.Cnf.DatabaseFilePath
+
+	dbFile := filepath.Join(filepath.Dir(dbPath), "scheduler.db")
 	_, err := os.Stat(dbFile)
 
 	var install bool
@@ -42,12 +39,13 @@ func CreateDB(mng *manager.Manager) error {
 	mng.Log.LogWarn("База данных отсутствует и будет создана новая")
 
 	// открытие БД
-	db, err := sql.Open("sqlite3", "./scheduler.db")
+	db, err := sql.Open("sqlite3", dbFile)
 	if err != nil {
 		mng.Log.LogError("Ошибка при открытии БД", err)
 		return err
 	}
-	defer db.Close()
+	manager.Mng.Db = db
+	//defer db.Close()
 
 	sqlStmt := `
 	CREATE TABLE IF NOT EXISTS scheduler (
@@ -73,12 +71,13 @@ func CreateDB(mng *manager.Manager) error {
 // Добавить задачу в БД
 func AddTask(t *Task, mng *manager.Manager) (string, error) {
 	// открытие БД
-	db, err := sql.Open("sqlite3", "./scheduler.db")
+	db := manager.Mng.Db
+	/* db, err := sql.Open("sqlite3", "./scheduler.db")
 	if err != nil {
 		mng.Log.LogError("Ошибка при открытии БД", err)
 		return "", err
 	}
-	defer db.Close()
+	defer db.Close() */
 	// Подготовка SQL-запроса для вставки данных
 	insertTaskSQL := `INSERT INTO scheduler (date, title, comment, repeat) VALUES (?, ?, ?, ?)`
 
@@ -105,14 +104,17 @@ func AddTask(t *Task, mng *manager.Manager) (string, error) {
 
 // Получить все задачи из БД
 func GetAllTasks(mng *manager.Manager) ([]Task, error) {
-	db, err := sql.Open("sqlite3", "./scheduler.db")
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
+	db := manager.Mng.Db
+
+	/* 	db, err := sql.Open("sqlite3", "./scheduler.db")
+	   	if err != nil {
+	   		return nil, err
+	   	}
+	   	defer db.Close() */
 
 	// Запрос для получения всех задач, отсортированных по дате
-	query := "SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date LIMIT 50"
+	recordsLimit := manager.Mng.Cnf.DbamountOfRecordsLimit
+	query := fmt.Sprintf("SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date LIMIT %s", recordsLimit)
 
 	// Выполнение SQL-запроса
 	rows, err := db.Query(query)
@@ -122,7 +124,7 @@ func GetAllTasks(mng *manager.Manager) ([]Task, error) {
 	defer rows.Close()
 
 	// Сбор результатов в слайс задач
-	var tasks []Task
+	var tasks []Task = make([]Task, 0)
 	for rows.Next() {
 		var task Task
 		err := rows.Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
@@ -131,10 +133,9 @@ func GetAllTasks(mng *manager.Manager) ([]Task, error) {
 		}
 		tasks = append(tasks, task)
 	}
-
-	// проверка на пустой слайс
-	if tasks == nil {
-		tasks = []Task{}
+	// проверка ошибки, возникшей во время rows.Next()
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return tasks, nil
@@ -143,11 +144,13 @@ func GetAllTasks(mng *manager.Manager) ([]Task, error) {
 // Получить задачи по поиску из БД
 func GetSearchedTasks(mng *manager.Manager, search string) ([]Task, error) {
 	// Подключение к базе данных
-	db, err := sql.Open("sqlite3", "./scheduler.db")
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
+	db := manager.Mng.Db
+
+	/* 	db, err := sql.Open("sqlite3", "./scheduler.db")
+	   	if err != nil {
+	   		return nil, err
+	   	}
+	   	defer db.Close() */
 
 	// Подготовка базового SQL-запроса
 	query := "SELECT id, date, title, comment, repeat FROM scheduler WHERE 1=1"
@@ -170,7 +173,8 @@ func GetSearchedTasks(mng *manager.Manager, search string) ([]Task, error) {
 	}
 
 	// Завершение SQL-запроса и сортировка по дате
-	query += " ORDER BY date LIMIT 50"
+	recordsLimit := manager.Mng.Cnf.DbamountOfRecordsLimit
+	query += fmt.Sprintf(" ORDER BY date LIMIT %s", recordsLimit)
 
 	// Выполнение SQL-запроса
 	rows, err := db.Query(query, args...)
@@ -189,6 +193,10 @@ func GetSearchedTasks(mng *manager.Manager, search string) ([]Task, error) {
 		}
 		tasks = append(tasks, task)
 	}
+	// проверка ошибки, возникшей во время rows.Next()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	// Если задач нет, возвращаем пустой список
 	if tasks == nil {
@@ -201,21 +209,23 @@ func GetSearchedTasks(mng *manager.Manager, search string) ([]Task, error) {
 // Получить задачу по id
 func GetTask(mng *manager.Manager, id string) (Task, error) {
 	// Подключение к базе данных
-	db, err := sql.Open("sqlite3", "./scheduler.db")
-	if err != nil {
-		return Task{}, err
-	}
-	defer db.Close()
+	db := manager.Mng.Db
+
+	/* 	db, err := sql.Open("sqlite3", "./scheduler.db")
+	   	if err != nil {
+	   		return Task{}, err
+	   	}
+	   	defer db.Close() */
 
 	// Подготовка SQL-запроса для поиска задачи по ID
-	query := "SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ? LIMIT 1"
+	query := "SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?"
 
 	// Выполнение SQL-запроса
 	row := db.QueryRow(query, id)
 
 	// Сбор результата
 	var task Task
-	err = row.Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
+	err := row.Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return Task{}, fmt.Errorf("Задача с id %s не найдена", id) // Если задача не найдена, возвращаем nil
@@ -228,54 +238,57 @@ func GetTask(mng *manager.Manager, id string) (Task, error) {
 // изменение существующей задачи
 func ChangeTask(t *Task, mng *manager.Manager) error {
 	// Подключение к базе данных
-	db, err := sql.Open("sqlite3", "./scheduler.db")
-	if err != nil {
-		return err
-	}
-	defer db.Close()
+	db := manager.Mng.Db
 
-	// Проверяем существует ли задача с указанным ID
-	var exists bool
-	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM scheduler WHERE id = ?)", t.Id).Scan(&exists)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return fmt.Errorf("задача с ID %s не найдена", t.Id)
-	}
+	/* 	db, err := sql.Open("sqlite3", "./scheduler.db")
+	   	if err != nil {
+	   		return err
+	   	}
+	   	defer db.Close() */
 
 	// Обновление задачи в базе данных
-	_, err = db.Exec(`UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?`,
+	result, err := db.Exec(`UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?`,
 		t.Date, t.Title, t.Comment, t.Repeat, t.Id)
 	if err != nil {
 		return err
 	}
+
+	// Проверка, сколько строк было обновлено
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("задача с ID %s не найдена", t.Id)
+	}
+
 	return nil
 }
 
 // Удалить задачу из БД
 func DeleteTask(mng *manager.Manager, id string) error {
 	// Подключение к базе данных
-	db, err := sql.Open("sqlite3", "./scheduler.db")
-	if err != nil {
-		return err
-	}
-	defer db.Close()
+	db := manager.Mng.Db
 
-	// Проверяем существует ли задача с указанным ID
-	var exists bool
-	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM scheduler WHERE id = ?)", id).Scan(&exists)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return fmt.Errorf("Задача с id %s не найдена", id)
-	}
+	/* 	db, err := sql.Open("sqlite3", "./scheduler.db")
+	   	if err != nil {
+	   		return err
+	   	}
+	   	defer db.Close() */
 
 	// Удаление задачи из базы данных
-	_, err = db.Exec("DELETE FROM scheduler WHERE id = ?", id)
+	result, err := db.Exec("DELETE FROM scheduler WHERE id = ?", id)
 	if err != nil {
 		return err
+	}
+
+	// Проверка, сколько строк было обновлено
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("задача с ID %s не найдена", id)
 	}
 
 	return nil

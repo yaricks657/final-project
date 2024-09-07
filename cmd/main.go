@@ -10,8 +10,8 @@ import (
 	"github.com/yaricks657/final-project/config"
 	"github.com/yaricks657/final-project/internal/auth"
 	"github.com/yaricks657/final-project/internal/database"
+	"github.com/yaricks657/final-project/internal/handlers"
 	"github.com/yaricks657/final-project/internal/manager"
-	"github.com/yaricks657/final-project/internal/todo"
 	"github.com/yaricks657/final-project/pkg/logger"
 )
 
@@ -63,21 +63,21 @@ func main() {
 	fileServer := http.FileServer(http.Dir("./web"))
 	router.Handle("/*", http.StripPrefix("/", fileServer))
 	// проыерить следующую дату
-	router.Get("/api/nextdate", auth.Auth(todo.HandleNextDate))
+	router.Get("/api/nextdate", auth.Auth(handlers.HandleNextDate))
 	// добавить задачу
-	router.Post("/api/task", auth.Auth(todo.AddTask))
+	router.Post("/api/task", auth.Auth(handlers.AddTask))
 	// получить все задачи
-	router.Get("/api/tasks", auth.Auth(todo.GetAllTasks))
+	router.Get("/api/tasks", auth.Auth(handlers.GetAllTasks))
 	// получить задачи по поиску
 	//	router.Get("/api/tasks/{search}", todo.GetSearchedTasks)
 	// получить задачу
-	router.Get("/api/task", auth.Auth(todo.GetTask))
+	router.Get("/api/task", auth.Auth(handlers.GetTask))
 	// изменить задачу
-	router.Put("/api/task", auth.Auth(todo.ChangeTask))
+	router.Put("/api/task", auth.Auth(handlers.ChangeTask))
 	// выполнить задачу
-	router.Post("/api/task/done", auth.Auth(todo.DoneTask))
+	router.Post("/api/task/done", auth.Auth(handlers.DoneTask))
 	// удаление задачи
-	router.Delete("/api/task", auth.Auth(todo.DeleteTask))
+	router.Delete("/api/task", auth.Auth(handlers.DeleteTask))
 	// авторизация
 	router.Post("/api/signin", auth.SignIn)
 
@@ -86,5 +86,8 @@ func main() {
 		os.Exit(1)
 	}
 	logger.LogInfo("Сервер запущен на порту", config.ServerPort)
+
+	// закрываем БД
+	defer manager.Mng.Db.Close()
 
 }

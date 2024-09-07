@@ -1,4 +1,4 @@
-package todo
+package handlers
 
 import (
 	"encoding/json"
@@ -13,7 +13,6 @@ import (
 
 // Изменить существующую задачу
 func ChangeTask(w http.ResponseWriter, r *http.Request) {
-	manager.Mng.Log.LogInfo("поступил запрос на изменение задачи (ChangeTask): ", r.RequestURI)
 	// проверка на нужный метод
 	if r.Method != http.MethodPut {
 		manager.Mng.Log.LogWarn("Некорректный метод запроса")
@@ -53,9 +52,9 @@ func ChangeTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// проверка на корректность даты
-	ok, err = task.isDateValid()
+	err = task.isDateValid()
 
-	if !ok {
+	if err != nil {
 		manager.Mng.Log.LogError("Некорректный формат даты:", err)
 		sendErrorResponse(w, fmt.Sprintf("Некорректный формат даты %s", err))
 		return
@@ -63,12 +62,12 @@ func ChangeTask(w http.ResponseWriter, r *http.Request) {
 
 	// применение правила для даты, если она раньше сегодняшнего дня
 	today := time.Now().Truncate(24 * time.Hour)
-	Ttime, _ := time.Parse("20060102", task.Date)
+	parsedDate, _ := time.Parse(DateFormat, task.Date)
 
-	if Ttime.Before(today) {
+	if parsedDate.Before(today) {
 		manager.Mng.Log.LogWarn("Дата раньше сегодняшнего числа")
-		ok, err = task.isRuleValid(today)
-		if !ok {
+		err = task.isRuleValid(today)
+		if err != nil {
 			manager.Mng.Log.LogError("Ошибка при применении правила повторения", err)
 			sendErrorResponse(w, fmt.Sprintf("Ошибка при применении правила повторения %s", err))
 			return
@@ -76,25 +75,26 @@ func ChangeTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// запись задачи в БД
-	addTask := database.Task{
+	updateTask := database.Task{
 		Id:      task.Id,
 		Date:    task.Date,
 		Title:   task.Title,
 		Comment: task.Comment,
 		Repeat:  task.Repeat,
 	}
-	err = database.ChangeTask(&addTask, &manager.Mng)
+	err = database.ChangeTask(&updateTask, &manager.Mng)
 	if err != nil {
 		manager.Mng.Log.LogError("Ошибка при обновлении задачи в БД", err)
 		sendErrorResponse(w, fmt.Sprintf("Ошибка при обновлении задачи в БД: %s", err))
 		return
 	}
 
-	// отправка успешного ответа с id
-	manager.Mng.Log.LogInfo("Задача успешно обновлена в БД")
 	// Отправляем пустой JSON в случае успеха
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("{}"))
+	_, err = w.Write([]byte("{}"))
+	if err != nil {
+		manager.Mng.Log.LogError("Ошибка при отправке ответа: ", err)
+	}
 
 }

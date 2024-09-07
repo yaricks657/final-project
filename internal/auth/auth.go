@@ -10,14 +10,13 @@ import (
 
 func Auth(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		manager.Mng.Log.LogInfo("авторизация идет ", r.RemoteAddr)
 
 		pass := manager.Mng.Cnf.Password
-		fmt.Println(pass)
 		if len(pass) > 0 {
+			fmt.Println(r.Cookie("token"))
 			cookie, err := r.Cookie("token")
 			if err != nil {
-				sendErrorResponse(w, "Authentication required", http.StatusUnauthorized)
+				sendErrorResponse(w, fmt.Sprintf("Authentication required: %s", err), http.StatusUnauthorized)
 				return
 			}
 
@@ -29,23 +28,26 @@ func Auth(next http.HandlerFunc) http.HandlerFunc {
 				return []byte(manager.Mng.Cnf.JWTSecret), nil
 			})
 			if err != nil || !token.Valid {
-				sendErrorResponse(w, "Authentication required", http.StatusUnauthorized)
+				sendErrorResponse(w, "Authentication required2", http.StatusUnauthorized)
 				return
 			}
 
 			claims, ok := token.Claims.(jwt.MapClaims)
 			if !ok || !token.Valid {
-				sendErrorResponse(w, "Authentication required", http.StatusUnauthorized)
+				sendErrorResponse(w, "Authentication required3", http.StatusUnauthorized)
 				return
 			}
 
-			storedPasswordHash := hashPassword(pass)
+			storedPasswordHash, err := hashPassword(pass)
+			if err != nil {
+				manager.Mng.Log.LogError("Ошибка при хешировании: ", err)
+				return
+			}
 			if claims["passwordHash"] != storedPasswordHash {
-				sendErrorResponse(w, "Authentication required", http.StatusUnauthorized)
+				sendErrorResponse(w, "Authentication required4", http.StatusUnauthorized)
 				return
 			}
 		}
-		manager.Mng.Log.LogInfo("авторизация успешна ", r.RemoteAddr)
 
 		next(w, r)
 	})

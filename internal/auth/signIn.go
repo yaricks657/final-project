@@ -14,7 +14,6 @@ import (
 
 // обработчик для api/sign
 func SignIn(w http.ResponseWriter, r *http.Request) {
-	manager.Mng.Log.LogInfo("поступил запрос на авторизацию ", r.RemoteAddr)
 
 	// проверка метода
 	if r.Method != http.MethodPost {
@@ -41,7 +40,19 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// проверка хешей паролей на совпадение
-	if hashPassword(req.Password) != hashPassword(storedPassword) {
+	userPassHash, err := hashPassword(req.Password)
+	if err != nil {
+		manager.Mng.Log.LogError("Ошибка хэширования ", err)
+		sendErrorResponse(w, "Ошибка хэширования", http.StatusInternalServerError)
+		return
+	}
+	storedPassHass, err := hashPassword(storedPassword)
+	if err != nil {
+		manager.Mng.Log.LogError("Ошибка хэширования ", err)
+		sendErrorResponse(w, "Ошибка хэширования", http.StatusInternalServerError)
+		return
+	}
+	if userPassHash != storedPassHass {
 		manager.Mng.Log.LogWarn("Пользователь ввел неверный пароль")
 		sendErrorResponse(w, "Неверный пароль", http.StatusUnauthorized)
 		return
@@ -54,7 +65,7 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 		sendErrorResponse(w, fmt.Sprintln("Не настроен JWT на сервере"), http.StatusInternalServerError)
 		return
 	}
-	token, err := generateJWT(hashPassword(req.Password), []byte(JWTSecret))
+	token, err := generateJWT(userPassHash, []byte(JWTSecret))
 	if err != nil {
 		manager.Mng.Log.LogError("Ошибка при создании токена", err)
 		sendErrorResponse(w, "Ошибка при создании токена", http.StatusInternalServerError)
@@ -66,10 +77,13 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 }
 
 // Хэширование пароля
-func hashPassword(password string) string {
+func hashPassword(password string) (string, error) {
 	hash := sha256.New()
-	hash.Write([]byte(password))
-	return hex.EncodeToString(hash.Sum(nil))
+	_, err := hash.Write([]byte(password))
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 // Генерация JWT токена

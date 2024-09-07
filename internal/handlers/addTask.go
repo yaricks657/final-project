@@ -1,4 +1,4 @@
-package todo
+package handlers
 
 import (
 	"encoding/json"
@@ -10,11 +10,13 @@ import (
 
 	"github.com/yaricks657/final-project/internal/database"
 	"github.com/yaricks657/final-project/internal/manager"
+	"github.com/yaricks657/final-project/internal/todo"
 )
+
+const DateFormat = "20060102"
 
 // добавить задачу в БД
 func AddTask(w http.ResponseWriter, r *http.Request) {
-	manager.Mng.Log.LogInfo("поступил запрос на добавление задачи (AddTask)")
 	// проверка на нужный метод
 	if r.Method != http.MethodPost {
 		manager.Mng.Log.LogWarn("Некорректный метод запроса")
@@ -48,9 +50,9 @@ func AddTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// проверка на корректность даты
-	ok, err = task.isDateValid()
+	err = task.isDateValid()
 
-	if !ok {
+	if err != nil {
 		manager.Mng.Log.LogError("Некорректный формат даты:", err)
 		sendErrorResponse(w, fmt.Sprintf("Некорректный формат даты %s", err))
 		return
@@ -58,12 +60,12 @@ func AddTask(w http.ResponseWriter, r *http.Request) {
 
 	// применение правила для даты, если она раньше сегодняшнего дня
 	today := time.Now().Truncate(24 * time.Hour)
-	Ttime, _ := time.Parse("20060102", task.Date)
+	parsedDate, _ := time.Parse(DateFormat, task.Date)
 
-	if Ttime.Before(today) {
+	if parsedDate.Before(today) {
 		manager.Mng.Log.LogWarn("Дата раньше сегодняшнего числа")
-		ok, err = task.isRuleValid(today)
-		if !ok {
+		err = task.isRuleValid(today)
+		if err != nil {
 			manager.Mng.Log.LogError("Ошибка при применении правила повторения", err)
 			sendErrorResponse(w, fmt.Sprintf("Ошибка при применении правила повторения %s", err))
 			return
@@ -85,42 +87,41 @@ func AddTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// отправка успешного ответа с id
-	manager.Mng.Log.LogInfo("Задача успешно записана в БД")
 	sendSuccessResponse(w, id)
 
 }
 
 // проверка правила
-func (t *Task) isRuleValid(now time.Time) (bool, error) {
+func (t *Task) isRuleValid(now time.Time) error {
 	if t.Repeat == "" {
 		manager.Mng.Log.LogWarn("Правило отсутствует. Будет проставлено сегодняшнее число")
-		t.Date = time.Now().Format("20060102")
-		return true, nil
+		t.Date = time.Now().Format(DateFormat)
+		return fmt.Errorf("Правило отсутствует. Будет проставлено сегодняшнее число")
 	}
 
-	newDate, err := NextDate(now, t.Date, t.Repeat)
+	newDate, err := todo.NextDate(now, t.Date, t.Repeat)
 	if err != nil {
-		return false, err
+		return err
 	}
 	t.Date = newDate
 
-	return true, nil
+	return nil
 }
 
 // проверка даты на валидность
-func (t *Task) isDateValid() (bool, error) {
+func (t *Task) isDateValid() error {
 	if t.Date == "" {
-		t.Date = time.Now().Format("20060102")
+		t.Date = time.Now().Format(DateFormat)
 		manager.Mng.Log.LogWarn("Дата отсутствует. Будет проставлено сегодняшнее число")
-		return true, nil
+		return fmt.Errorf("Дата отсутствует. Будет проставлено сегодняшнее число")
 	}
 
-	_, err := time.Parse("20060102", t.Date)
+	_, err := time.Parse(DateFormat, t.Date)
 	if err != nil {
-		return false, fmt.Errorf("Некорректный формат даты. Ожидался YYYYMMDD, получили %s", t.Date)
+		return fmt.Errorf("Некорректный формат даты. Ожидался YYYYMMDD, получили %s", t.Date)
 	}
 
-	return true, nil
+	return nil
 }
 
 // проверить наличие обязательных полей

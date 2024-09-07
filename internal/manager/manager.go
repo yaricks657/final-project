@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -22,6 +23,9 @@ type Manager struct {
 
 	// логирование zerolog
 	Log *logger.Logger
+
+	// бд
+	Db *sql.DB
 }
 
 // структура для создания manager

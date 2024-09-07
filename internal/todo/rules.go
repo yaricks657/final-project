@@ -2,18 +2,17 @@ package todo
 
 import (
 	"fmt"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/yaricks657/final-project/internal/manager"
 )
+
+var DateFormat string = "20060102"
 
 // NextDate вычисляет следующую дату на основе текущей даты, исходной даты и правила повторения.
 func NextDate(now time.Time, date string, repeat string) (string, error) {
-	parsedDate, err := time.Parse("20060102", date)
+	parsedDate, err := time.Parse(DateFormat, date)
 	if err != nil {
 		return "", err
 	}
@@ -74,7 +73,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 				}
 			}
 			if found && parsedDate.After(now) {
-				return parsedDate.Format("20060102"), nil
+				return parsedDate.Format(DateFormat), nil
 			}
 			parsedDate = parsedDate.AddDate(0, 0, 7-int(parsedDate.Weekday())+daysOfWeek[0])
 		}
@@ -124,7 +123,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 		return "", fmt.Errorf("unsupported repeat rule: %s", repeat)
 	}
 
-	return parsedDate.Format("20060102"), nil
+	return parsedDate.Format(DateFormat), nil
 }
 
 // получить ближайшую дату
@@ -143,7 +142,7 @@ func getEarliestDate(dates []time.Time) string {
 	}
 
 	// Возвращаем самую раннюю дату в формате YYYYMMDD
-	return earliest.Format("20060102")
+	return earliest.Format(DateFormat)
 }
 
 // проверка на високосный год
@@ -205,30 +204,4 @@ func getLastDayOfMonth(year int, month time.Month) int {
 	lastDayOfMonth := firstDayNextMonth.Add(-24 * time.Hour)
 
 	return lastDayOfMonth.Day()
-}
-
-// обработчик для /api/nextdate
-func HandleNextDate(w http.ResponseWriter, r *http.Request) {
-	manager.Mng.Log.LogInfo("поступил запрос на получение задачи (HandleNextDate)", r.RequestURI)
-
-	nowStr := r.FormValue("now")
-	dateStr := r.FormValue("date")
-	repeat := r.FormValue("repeat")
-
-	now, err := time.Parse("20060102", nowStr)
-	if err != nil {
-		manager.Mng.Log.LogError("Invalid now format, expected YYYYMMDD", err)
-		http.Error(w, "Invalid now format, expected YYYYMMDD", http.StatusBadRequest)
-		return
-	}
-
-	nextDate, err := NextDate(now, dateStr, repeat)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `%s`, nextDate)
-	manager.Mng.Log.LogInfo("успешная обработка запроса api/nextdate (HandleNextDate)")
 }

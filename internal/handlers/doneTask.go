@@ -1,4 +1,4 @@
-package todo
+package handlers
 
 import (
 	"fmt"
@@ -7,11 +7,11 @@ import (
 
 	"github.com/yaricks657/final-project/internal/database"
 	"github.com/yaricks657/final-project/internal/manager"
+	"github.com/yaricks657/final-project/internal/todo"
 )
 
 // Процесс выполнения задачи
 func DoneTask(w http.ResponseWriter, r *http.Request) {
-	manager.Mng.Log.LogInfo("Поступил запрос на выполнение задачи ", r.RequestURI)
 
 	// проверка на наличие search в запросе
 	id := r.URL.Query().Get("id")
@@ -37,17 +37,19 @@ func DoneTask(w http.ResponseWriter, r *http.Request) {
 			sendErrorResponse(w, fmt.Sprintf("Ошибка удалении задачи из БД: %s", err))
 			return
 		}
-		manager.Mng.Log.LogInfo("Задача успешно удалена из БД и выполнена")
 		// Отправляем пустой JSON в случае успеха
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("{}"))
+		_, err = w.Write([]byte("{}"))
+		if err != nil {
+			manager.Mng.Log.LogError("Ошибка при отправке ответа: ", err)
+		}
 		return
 	}
 
 	// перерасчитываем дату согласно правилу
 	today := time.Now().Truncate(24 * time.Hour)
-	newDate, err := NextDate(today, task.Date, task.Repeat)
+	newDate, err := todo.NextDate(today, task.Date, task.Repeat)
 	if err != nil {
 		manager.Mng.Log.LogError("Ошибка при применении правила повторения", err)
 		sendErrorResponse(w, fmt.Sprintf("Ошибка при применении правила повторения %s", err))
@@ -63,10 +65,12 @@ func DoneTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	manager.Mng.Log.LogInfo("Задача успешно обновлена в БД и выполнена")
 	// Отправляем пустой JSON в случае успеха
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	w.Write([]byte("{}"))
+	_, err = w.Write([]byte("{}"))
+	if err != nil {
+		manager.Mng.Log.LogError("Ошибка при отправке ответа: ", err)
+	}
 }

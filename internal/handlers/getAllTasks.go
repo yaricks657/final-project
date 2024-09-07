@@ -1,4 +1,4 @@
-package todo
+package handlers
 
 import (
 	"encoding/json"
@@ -9,24 +9,28 @@ import (
 	"github.com/yaricks657/final-project/internal/manager"
 )
 
-func GetTask(w http.ResponseWriter, r *http.Request) {
-	manager.Mng.Log.LogInfo("Поступил запрос на получение задачи: ", r.RequestURI)
-
-	id := r.URL.Query().Get("id")
-	if id == "" {
-		manager.Mng.Log.LogError("В запросе должен быть id ", fmt.Errorf("empty id"))
-		sendErrorResponse(w, fmt.Sprintf("В запросе должен быть id %s", fmt.Errorf("empty id")))
+// получить задачи из БД
+func GetAllTasks(w http.ResponseWriter, r *http.Request) {
+	// проверка запроса на search
+	search := r.URL.Query().Get("search")
+	if search != "" {
+		FindTasksBySearchTerm(w, r)
 		return
 	}
 
-	task, err := database.GetTask(&manager.Mng, id)
+	tasks, err := database.GetAllTasks(&manager.Mng)
 	if err != nil {
 		manager.Mng.Log.LogError("Ошибка при обращении к БД: ", err)
 		sendErrorResponse(w, fmt.Sprintf("Ошибка при обращении к БД: %s", err))
 		return
 	}
 
-	jsonResponse, err := json.Marshal(task)
+	// упаковка данных
+	response := ResponseGetAllTasks{
+		Tasks: tasks,
+	}
+
+	jsonResponse, err := json.Marshal(response)
 	if err != nil {
 		manager.Mng.Log.LogError("Ошибка при маршалинге данных: ", err)
 		sendErrorResponse(w, fmt.Sprintf("Ошибка при маршалинге данных: %s", err))
@@ -35,6 +39,9 @@ func GetTask(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write(jsonResponse)
-	manager.Mng.Log.LogInfo("Отправка сообщения успешна с id: ", id)
+	_, err = w.Write(jsonResponse)
+	if err != nil {
+		manager.Mng.Log.LogError("Ошибка при отправке ответа: ", err)
+		return
+	}
 }

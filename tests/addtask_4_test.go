@@ -71,9 +71,6 @@ func postJSON(apipath string, values map[string]any, method string) (map[string]
 		return nil, err
 	}
 
-	/* 	if len(body) == 0 {
-		return make(map[string]any), nil
-	} */
 	err = json.Unmarshal(body, &m)
 	return m, err
 }

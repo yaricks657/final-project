@@ -1,4 +1,4 @@
-package todo
+package handlers
 
 import (
 	"fmt"
@@ -10,7 +10,6 @@ import (
 
 // Удаление задачи
 func DeleteTask(w http.ResponseWriter, r *http.Request) {
-	manager.Mng.Log.LogInfo("поступил запрос на удаление задачи: ", r.RequestURI)
 
 	// проверка на наличие search в запросе
 	id := r.URL.Query().Get("id")
@@ -27,9 +26,11 @@ func DeleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	manager.Mng.Log.LogInfo("Задача успешно удалена из БД", id)
 	// Отправляем пустой JSON в случае успеха
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("{}"))
+	_, err = w.Write([]byte("{}"))
+	if err != nil {
+		manager.Mng.Log.LogError("Ошибка при отправке ответа: ", err)
+	}
 }

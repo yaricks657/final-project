@@ -1,20 +1,18 @@
-# Базовый образ Ubuntu
-FROM ubuntu:latest
+# Используем официальный легкий образ с Go
+FROM golang:1.20-alpine
 
-RUN apt-get update && apt-get install -y \
-    golang \
-    git \
-    build-essential \
-    sqlite3
+#RUN apt-get update && apt-get install -y \
+  #  golang \
+  #  git \
+  #  build-essential \
+  #  sqlite3
 
 # Создаем директорию для приложения
 WORKDIR /app
 
-COPY go.mod go.sum ./
+COPY . .
 
 RUN go mod download
-
-COPY . .
 
 RUN go build -o /app/main cmd/main.go
 

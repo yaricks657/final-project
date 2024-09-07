@@ -1,4 +1,4 @@
-package todo
+package handlers
 
 import "github.com/yaricks657/final-project/internal/database"
 
